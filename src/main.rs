@@ -172,8 +172,8 @@ impl Default for Config {
 }
 
 enum What {
-    DependenciesFor(String),
-    ThisPackage(String),
+    DependenciesFor(Vec<String>),
+    ThesePackages(Vec<String>),
 }
 
 impl ColconInvocation {
@@ -376,12 +376,12 @@ impl ConfiguredBuild {
         cmd.current_dir(&self.workspace);
         cmd.args(self.args.iter());
         match what {
-            What::DependenciesFor(package) => {
-                cmd.arg("--packages-up-to").arg(package);
-                cmd.arg("--packages-skip").arg(package);
+            What::DependenciesFor(pkgs) => {
+                cmd.arg("--packages-up-to").args(&pkgs[..]);
+                cmd.arg("--packages-skip").args(&pkgs[..]);
             }
-            What::ThisPackage(package) => {
-                cmd.arg("--packages-select").arg(package);
+            What::ThesePackages(pkgs) => {
+                cmd.arg("--packages-select").args(&pkgs[..]);
             }
         }
         print_command(&cmd);
@@ -500,10 +500,10 @@ enum Verbs {
         #[arg(short, long, default_value_t = false)]
         force: bool,
     },
-    /// Build a package
+    /// Build one or more packages
     Build {
-        /// The package to build (default: current directory)
-        package: Option<String>,
+        /// One or more packages to build (default: current directory)
+        packages: Option<Vec<String>>,
 
         /// Whether to skip rebuilding dependencies
         #[arg(short, long, default_value_t = false)]
@@ -675,7 +675,7 @@ fn main() {
         }
 
         Verbs::Build {
-            package,
+            packages,
             skip_dependencies,
             skip_tests,
             build_type,
@@ -684,25 +684,31 @@ fn main() {
                 config.upstream.build_tests = false;
                 config.package.build_tests = false;
             }
-            let package = package_or(package.clone())
-                .or_else(exit_on_not_found)
-                .expect("should have exited");
+            let mut pkgs: Vec<String> = Vec::new();
+            if let Some(packages) = packages {
+                for p in packages {
+                    let pkg = package_or(Some(p.clone()))
+                        .or_else(exit_on_not_found)
+                        .expect("should have exited");
+                    pkgs.push(pkg);
+                }
+            }
             if !skip_dependencies {
-                header!("Building dependencies for '{}'", package);
+                header!("Building dependencies for '{:?}'", pkgs);
                 let status = ColconInvocation::new(&ws, false)
                     .build(&BuildOutput::default())
                     .configure(&config.upstream)
-                    .run(&What::DependenciesFor(package.clone()));
+                    .run(&What::DependenciesFor(pkgs.clone()));
                 exit_on_error(status);
             }
             if let Some(t) = build_type {
                 config.package.build_type = t.clone();
             }
-            header!("Building '{package}'");
+            header!("Building '{:?}'", pkgs);
             let status = ColconInvocation::new(&ws, false)
                 .build(&BuildOutput::default())
                 .configure(&config.package)
-                .run(&What::ThisPackage(package.clone()));
+                .run(&What::ThesePackages(pkgs.clone()));
             exit_on_error(status);
         }
 
@@ -721,14 +727,14 @@ fn main() {
                 let status = ColconInvocation::new(&ws, false)
                     .build(&BuildOutput::default())
                     .configure(&config.upstream)
-                    .run(&What::DependenciesFor(package.clone()));
+                    .run(&What::DependenciesFor(vec![package.clone()]));
                 exit_on_error(status);
                 if test.is_some() {
                     header!("Building '{package}'");
                     let status = ColconInvocation::new(&ws, false)
                         .build(&BuildOutput::default())
                         .configure(&config.package)
-                        .run(&What::ThisPackage(package.clone()));
+                        .run(&What::ThesePackages(vec![package.clone()]));
                     exit_on_error(status);
                 }
             }
@@ -742,7 +748,7 @@ fn main() {
                     let status = ColconInvocation::new(&ws, false)
                         .build(&BuildOutput::default())
                         .configure(&config.package)
-                        .run(&What::ThisPackage(package.clone()));
+                        .run(&What::ThesePackages(vec![package.clone()]));
                     exit_on_error(status);
                 }
             }
