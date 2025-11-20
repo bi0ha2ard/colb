@@ -49,9 +49,15 @@ cd my_ws/src/my_repo/my_package/src
 colb build
 ```
 
+Building multiple packages at once:
+
+```console
+colb build my_package my_other_package my_third_package
+```
+
 ## Requirements
 
-The invoced commands make use of the `colcon-common-extensions` and [colcon mixins](https://github.com/colcon/colcon-mixin-repository) by default, so they should be installed.
+The invoked commands make use of the `colcon-common-extensions` and [colcon mixins](https://github.com/colcon/colcon-mixin-repository) by default, so they should be installed.
 By default, the `ccache`, `ninja` and `mold` mixins are enabled, so the associated programs should be installed.
 
 ## Installation
